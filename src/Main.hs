@@ -29,14 +29,11 @@ main :: IO ()
 main = putStrLn "foo"
 
 --------------------------------------------------------------------------------
---- TOKENS ---------------------------------------------------------------------
+--- TOKENIZER ------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
 data Token = TkNum Int | TkRPar | TkLPar | TkName String deriving (Eq, Show)
 
---------------------------------------------------------------------------------
---- TOKENIZER ------------------------------------------------------------------
---------------------------------------------------------------------------------
 type TkState = (String, [Token])
 
 tokenize :: String -> [Token]
@@ -79,3 +76,40 @@ tokenizeName input = let nam = takeWhile isAlpha input
 --------------------------------------------------------------------------------
 --- PARSER ---------------------------------------------------------------------
 --------------------------------------------------------------------------------
+
+type AST = [Node]
+data Node = Number Int | FunctionCall String [Node] deriving (Show, Eq)
+
+type PrState = ([Token], [Node])
+
+parse :: [Token] -> AST
+parse [] = []
+parse ts = let (node, ts') = parseToken ts
+               ns          = parse ts'
+           in
+             node:ns
+             
+
+
+parseToken :: [Token] -> (Node, [Token])
+parseToken (t:ts) = case t of
+                      TkNum i -> (Number i, ts)
+                      TkLPar  -> let (as, ts') = parseFunc ts
+                                 in
+                                   (as, ts')
+
+
+parseFunc :: [Token] -> (Node, [Token])
+parseFunc (t:ts) = case t of
+                     TkName f -> let fname      = f
+                                     (ops, ts') = parseOperands ts
+                                 in
+                                   (FunctionCall fname ops, ts')
+                         
+parseOperands :: [Token] -> ([Node], [Token])
+parseOperands (TkRPar:ts) = ([], ts)
+parseOperands ts = let (op, ts')   = parseToken ts
+                       (ops, ts'') = parseOperands ts' 
+                   in
+                     (op:ops, ts'')
+                  
