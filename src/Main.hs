@@ -24,6 +24,7 @@ module Main where
 import Data.Char
 import Control.Monad.State
 import Text.Printf
+import Data.List
 
 main :: IO ()
 main = putStrLn "foo"
@@ -77,23 +78,28 @@ tokenizeName input = let nam = takeWhile isAlpha input
 --- PARSER ---------------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-type AST = [Node]
-data Node = Number Int | FunctionCall String [Node] deriving (Show, Eq)
+data Node
+  = NumberLit Int
+  | CallExpr String [Node]
+  | Program [Node]
+  | Empty
+  deriving (Show, Eq)
+           
 
 type PrState = ([Token], [Node])
 
-parse :: [Token] -> AST
-parse [] = []
-parse ts = let (node, ts') = parseToken ts
-               ns          = parse ts'
+parse :: [Token] -> Node
+parse [] = Program []
+parse ts = let (node, ts')  = parseToken ts
+               (Program ns) = parse ts'
            in
-             node:ns
+             Program $ node:ns
              
 
 
 parseToken :: [Token] -> (Node, [Token])
 parseToken (t:ts) = case t of
-                      TkNum i -> (Number i, ts)
+                      TkNum i -> (NumberLit i, ts)
                       TkLPar  -> let (as, ts') = parseFunc ts
                                  in
                                    (as, ts')
@@ -104,7 +110,7 @@ parseFunc (t:ts) = case t of
                      TkName f -> let fname      = f
                                      (ops, ts') = parseOperands ts
                                  in
-                                   (FunctionCall fname ops, ts')
+                                   (CallExpr fname ops, ts')
                          
 parseOperands :: [Token] -> ([Node], [Token])
 parseOperands (TkRPar:ts) = ([], ts)
@@ -112,4 +118,46 @@ parseOperands ts = let (op, ts')   = parseToken ts
                        (ops, ts'') = parseOperands ts' 
                    in
                      (op:ops, ts'')
-                  
+
+--------------------------------------------------------------------------------
+--- TRAVERSER ------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+--- TRANSFORMER ----------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+transform :: Node -> Node -> AST
+
+transform (NumberLit i)     _   = NumberLiteral i
+transform (CallExpr s pars) par = let callee = Identifier s
+                                      parms  = map (`transform` (CallExpr s pars)) pars
+                                      result = CallExpression callee parms
+                                  in
+                                    case par of
+                                      (CallExpr _ _) -> result
+                                      _              -> Expression result
+                                    
+transform (Program ns)      _   = Root $ map (`transform` Empty) ns
+                                   
+--------------------------------------------------------------------------------
+--- CODE GENERATOR -------------------------------------------------------------
+--------------------------------------------------------------------------------
+
+data AST
+ = Root [AST]
+ | Expression AST
+ | CallExpression AST [AST]
+ | Identifier String
+ | NumberLiteral Int
+ deriving(Show, Eq)
+           
+          
+generateCode :: AST -> String
+generateCode (Root ns)               = foldl (++) "" (intersperse "\n" (map generateCode ns))
+generateCode (Expression e)          = printf "%s;" (generateCode e)
+generateCode (CallExpression f pars) = let name  = generateCode f
+                                           pars' = foldl (++) "" (intersperse ", " (map generateCode pars))
+                                       in
+                                         printf "%s(%s)" name pars'
+generateCode (Identifier s)          = s
+generateCode (NumberLiteral n)       = show n
