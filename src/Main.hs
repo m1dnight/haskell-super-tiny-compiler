@@ -42,15 +42,13 @@ tokenizer = do (input, ts) <- get
                     
 
 tokenizeNumber :: String -> (String, Token)
-tokenizeNumber input = let num = takeWhile isDigit input
-                           res = dropWhile isDigit input
+tokenizeNumber input = let (num,res) = span isDigit input
                        in
                          (res, TkNum $ read num)
 
                          
 tokenizeName :: String -> (String, Token)
-tokenizeName input = let nam = takeWhile isAlpha input
-                         res = dropWhile isAlpha input
+tokenizeName input = let (nam,res) = span isAlpha input
                      in
                        (res, TkName nam)                         
 
@@ -129,10 +127,10 @@ data AST
            
           
 generateCode :: AST -> String
-generateCode (Root ns)               = foldl (++) "" (intersperse "\n" (map generateCode ns))
+generateCode (Root ns)               = foldl' (++) "" (intersperse "\n" (map generateCode ns))
 generateCode (Expression e)          = printf "%s;" (generateCode e)
 generateCode (CallExpression f pars) = let name  = generateCode f
-                                           pars' = foldl (++) "" (intersperse ", " (map generateCode pars))
+                                           pars' = foldl' (++) "" (intersperse ", " (map generateCode pars))
                                        in
                                          printf "%s(%s)" name pars'
 generateCode (Identifier s)          = s
